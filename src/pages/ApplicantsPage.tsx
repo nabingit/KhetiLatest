@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Job, Application, User } from '../types';
 import { jobStorage, applicationStorage } from '../utils/storage';
 import { JobStatusManager } from '../utils/jobStatusManager';
-import { ArrowLeft, User as UserIcon, Mail, Calendar, CheckCircle, XCircle, Users, Award, Eye, MapPin, Weight, Ruler, Camera, X, Briefcase, Phone } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Mail, Calendar, CheckCircle, XCircle, Users, Award, Eye, MapPin, Weight, Ruler, X, Briefcase, Phone } from 'lucide-react';
 
 export function ApplicantsPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -12,6 +12,8 @@ export function ApplicantsPage() {
   const navigate = useNavigate();
   const [job, setJob] = useState<Job | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [allJobs, setAllJobs] = useState<Job[]>([]);
+  const [allApplications, setAllApplications] = useState<Application[]>([]);
   const [selectedWorker, setSelectedWorker] = useState<User | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
@@ -21,19 +23,21 @@ export function ApplicantsPage() {
     }
   }, [jobId]);
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!jobId) return;
 
     // Update job status first
-    JobStatusManager.updateAllJobStatuses();
+    await JobStatusManager.updateAllJobStatuses();
     
-    const allJobs = jobStorage.getJobs();
-    const currentJob = allJobs.find(j => j.id === jobId);
+    const jobs = await jobStorage.getJobs();
+    const currentJob = jobs.find((j: Job) => j.id === jobId);
     setJob(currentJob || null);
+    setAllJobs(jobs);
 
-    const allApplications = applicationStorage.getApplications();
-    const jobApplications = allApplications.filter(app => app.jobId === jobId);
+    const applications = await applicationStorage.getApplications();
+    const jobApplications = applications.filter((app: Application) => app.jobId === jobId);
     setApplications(jobApplications);
+    setAllApplications(applications);
   };
 
   const getWorkerProfile = (workerId: string): User | null => {
@@ -42,17 +46,14 @@ export function ApplicantsPage() {
   };
 
   const getWorkerJobsCompleted = (workerId: string): number => {
-    const allApplications = applicationStorage.getApplications();
-    const allJobs = jobStorage.getJobs();
-    
     // Get all accepted applications for this worker
     const acceptedApplications = allApplications.filter(
-      app => app.workerId === workerId && app.status === 'accepted'
+      (app: Application) => app.workerId === workerId && app.status === 'accepted'
     );
     
     // Count how many of those jobs are completed
-    const completedJobs = acceptedApplications.filter(app => {
-      const job = allJobs.find(j => j.id === app.jobId);
+    const completedJobs = acceptedApplications.filter((app: Application) => {
+      const job = allJobs.find((j: Job) => j.id === app.jobId);
       return job && job.status === 'completed';
     });
     
@@ -60,8 +61,7 @@ export function ApplicantsPage() {
   };
 
   const getWorkerTotalApplications = (workerId: string): number => {
-    const allApplications = applicationStorage.getApplications();
-    return allApplications.filter(app => app.workerId === workerId).length;
+    return allApplications.filter((app: Application) => app.workerId === workerId).length;
   };
 
   const getWorkerSuccessRate = (workerId: string): number => {
@@ -89,7 +89,7 @@ export function ApplicantsPage() {
       return;
     }
 
-    const application = applications.find(app => app.id === applicationId);
+    const application = applications.find((app: Application) => app.id === applicationId);
     if (!application) return;
 
     if (status === 'accepted') {

@@ -24,7 +24,7 @@ export function HomePage() {
   });
 
   useEffect(() => {
-    loadJobs();
+    if (user) loadJobs();
   }, [user]);
 
   useEffect(() => {
@@ -32,46 +32,36 @@ export function HomePage() {
   }, [jobs, searchTerm, filters]);
 
   const loadJobs = async () => {
-    // Update all job statuses first
     const updatedJobs = await JobStatusManager.updateAllJobStatuses();
     const allApplications = await applicationStorage.getApplications();
-    
     if (user?.userType === 'farmer') {
-      // Show farmer's own jobs
-      setJobs(updatedJobs.filter(job => job.farmerId === user.id));
+      setJobs(updatedJobs.filter((job: Job) => job.farmerId === user.id));
     } else {
-      // Show jobs that are open for workers (hide filled, completed, and in-progress jobs)
-      setJobs(updatedJobs.filter(job => job.status === 'open'));
-      // Load user's applications
-      setApplications(allApplications.filter(app => app.workerId === user?.id));
+      setJobs(updatedJobs.filter((job: Job) => job.status === 'open'));
+      setApplications(allApplications.filter((app: Application) => app.workerId === user?.id));
     }
   };
 
   const filterJobs = () => {
     let filtered = jobs;
-
     if (searchTerm) {
-      filtered = filtered.filter(job =>
+      filtered = filtered.filter((job: Job) =>
         job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         job.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         job.location.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-
     if (filters.maxWage) {
-      filtered = filtered.filter(job => job.wage <= parseInt(filters.maxWage));
+      filtered = filtered.filter((job: Job) => job.wage <= parseInt(filters.maxWage));
     }
-
     if (filters.durationType) {
-      filtered = filtered.filter(job => job.durationType === filters.durationType);
+      filtered = filtered.filter((job: Job) => job.durationType === filters.durationType);
     }
-
     if (filters.location) {
-      filtered = filtered.filter(job =>
+      filtered = filtered.filter((job: Job) =>
         job.location.toLowerCase().includes(filters.location.toLowerCase())
       );
     }
-
     setFilteredJobs(filtered);
   };
 
@@ -180,8 +170,8 @@ export function HomePage() {
     navigate(`/applicants/${jobId}`);
   };
 
-  const getWelcomeMessage = () => {
-    if (user?.userType === 'farmer') {
+  const getWelcomeMessage = (user: User) => {
+    if (user.userType === 'farmer') {
       return {
         greeting: `Welcome back, ${user.name}!`,
         subtitle: "Ready to find skilled workers for your farm?",
@@ -230,6 +220,9 @@ export function HomePage() {
 
   const FarmerProfileModal = () => {
     if (!selectedFarmer || !showFarmerModal) return null;
+
+    const farmerJobs = jobs.filter((job: Job) => job.farmerId === selectedFarmer.id);
+    const workersHired = farmerJobs.reduce((total: number, job: Job) => total + (job.acceptedWorkerIds?.length || 0), 0);
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -323,15 +316,13 @@ export function HomePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">
                   <div className="text-lg font-bold text-green-600">
-                    {jobStorage.getJobs().filter(job => job.farmerId === selectedFarmer.id).length}
+                    {farmerJobs.length}
                   </div>
                   <div className="text-xs text-gray-600">Jobs Posted</div>
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-bold text-green-600">
-                    {jobStorage.getJobs()
-                      .filter(job => job.farmerId === selectedFarmer.id)
-                      .reduce((total, job) => total + (job.acceptedWorkerIds?.length || 0), 0)}
+                    {workersHired}
                   </div>
                   <div className="text-xs text-gray-600">Workers Hired</div>
                 </div>
@@ -343,11 +334,9 @@ export function HomePage() {
     );
   };
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
-  const welcomeConfig = getWelcomeMessage();
+  const welcomeConfig = getWelcomeMessage(user!);
   const WelcomeIcon = welcomeConfig.icon;
 
   return (
@@ -379,13 +368,13 @@ export function HomePage() {
             <>
               <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2">
                 <div className={`text-lg font-bold ${welcomeConfig.textColor}`}>
-                  {jobs.filter(job => job.status === 'open').length}
+                  {jobs.filter((job: Job) => job.status === 'open').length}
                 </div>
                 <div className={`text-xs ${welcomeConfig.textColor} opacity-80`}>Active Jobs</div>
               </div>
               <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2">
                 <div className={`text-lg font-bold ${welcomeConfig.textColor}`}>
-                  {jobs.reduce((total, job) => total + (job.acceptedWorkerIds?.length || 0), 0)}
+                  {jobs.reduce((total: number, job: Job) => total + (job.acceptedWorkerIds?.length || 0), 0)}
                 </div>
                 <div className={`text-xs ${welcomeConfig.textColor} opacity-80`}>Workers Hired</div>
               </div>
@@ -400,7 +389,7 @@ export function HomePage() {
               </div>
               <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2">
                 <div className={`text-lg font-bold ${welcomeConfig.textColor}`}>
-                  {applications.filter(app => app.status === 'accepted').length}
+                  {applications.filter((app: Application) => app.status === 'accepted').length}
                 </div>
                 <div className={`text-xs ${welcomeConfig.textColor} opacity-80`}>Jobs Secured</div>
               </div>
@@ -502,7 +491,7 @@ export function HomePage() {
             )}
           </div>
         ) : (
-          filteredJobs.map(job => (
+          filteredJobs.map((job: Job) => (
             <JobCard
               key={job.id}
               job={job}
