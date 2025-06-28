@@ -1,14 +1,14 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, AuthContextType } from '../types';
-import { supabase, handleSupabaseError } from '../lib/supabase';
-import type { AuthError } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { User, AuthContextType } from "../types";
+import { supabase, handleSupabaseError } from "../lib/supabase";
+import type { AuthError } from "@supabase/supabase-js";
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
@@ -28,7 +28,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         await loadUserProfile(session.user.id);
       } else {
@@ -43,18 +45,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUserProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
         .single();
 
       if (error) {
-        // Handle case where profile doesn't exist yet (common during signup)
-        if (error.code === 'PGRST116') {
-          console.warn('Profile not found, this may be normal during signup process');
-          setUser(null);
-          return;
+        // Profile not found (code PGRST116) – let's try to create it
+        if (error.code === "PGRST116") {
+          console.warn("Profile not found. Creating default profile...");
+
+          const { data: authData, error: authError } =
+            await supabase.auth.getUser();
+          const authUser = authData?.user;
+
+          if (!authUser || authError) {
+            throw new Error("Cannot fetch authenticated user");
+          }
+
+          const { error: insertError } = await supabase
+            .from("profiles")
+            .insert({
+              id: authUser.id,
+              name: "",
+              contact_number: "",
+              user_type: "worker", // You can change this default
+              location: null,
+              date_of_birth: null,
+            });
+
+          if (insertError) {
+            throw insertError;
+          }
+
+          console.log("Profile created successfully. Retrying profile load...");
+          return await loadUserProfile(userId); // Retry now that it's created
         }
+
+        // Unexpected error
         throw error;
       }
 
@@ -62,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userProfile: User = {
           id: data.id,
           name: data.name,
-          email: '', // Will be set from auth
+          email: "",
           contactNumber: data.contact_number,
           userType: data.user_type,
           location: data.location || undefined,
@@ -71,11 +99,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           height: data.height || undefined,
           profilePicture: data.profile_picture || undefined,
           workingPicture: data.working_picture || undefined,
-          createdAt: data.created_at
+          createdAt: data.created_at,
         };
 
-        // Get email from auth user
-        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser();
         if (authUser?.email) {
           userProfile.email = authUser.email;
         }
@@ -83,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userProfile);
       }
     } catch (error) {
-      console.error('Error loading user profile:', error);
+      console.error("Error loading user profile:", error);
     } finally {
       setLoading(false);
     }
@@ -94,43 +123,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const birthDate = new Date(dateOfBirth);
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
       age--;
     }
-    
+
     return age;
   };
 
   const validateContactNumber = (contactNumber: string): boolean => {
     // Remove all non-digit characters
-    const cleanNumber = contactNumber.replace(/\D/g, '');
-    
+    const cleanNumber = contactNumber.replace(/\D/g, "");
+
     // Check if it's a valid Indian mobile number (10 digits starting with 6-9)
     const indianMobileRegex = /^[6-9]\d{9}$/;
     return indianMobileRegex.test(cleanNumber);
   };
 
   const signup = async (
-    name: string, 
-    email: string, 
-    password: string, 
+    name: string,
+    email: string,
+    password: string,
     contactNumber: string,
-    userType: 'farmer' | 'worker',
+    userType: "farmer" | "worker",
     location?: string,
     dateOfBirth?: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       // Validate contact number
       if (!validateContactNumber(contactNumber)) {
-        return { success: false, error: 'Please enter a valid 10-digit mobile number' };
+        return {
+          success: false,
+          error: "Please enter a valid 10-digit mobile number",
+        };
       }
 
       // Validate age for workers
-      if (userType === 'worker' && dateOfBirth) {
+      if (userType === "worker" && dateOfBirth) {
         const age = calculateAge(dateOfBirth);
         if (age < 16) {
-          return { success: false, error: 'Workers must be at least 16 years old to register' };
+          return {
+            success: false,
+            error: "Workers must be at least 16 years old to register",
+          };
         }
       }
 
@@ -141,12 +179,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         options: {
           data: {
             name,
-            contact_number: contactNumber.replace(/\D/g, ''),
+            contact_number: contactNumber.replace(/\D/g, ""),
             user_type: userType,
-            location: userType === 'worker' ? location : undefined,
-            date_of_birth: userType === 'worker' ? dateOfBirth : undefined
-          }
-        }
+            location: userType === "worker" ? location : undefined,
+            date_of_birth: userType === "worker" ? dateOfBirth : undefined,
+          },
+        },
       });
 
       if (authError) {
@@ -155,16 +193,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.user) {
         // Create profile
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            name,
-            contact_number: contactNumber.replace(/\D/g, ''),
-            user_type: userType,
-            location: userType === 'worker' ? location || null : null,
-            date_of_birth: userType === 'worker' ? dateOfBirth || null : null
-          });
+        const { error: profileError } = await supabase.from("profiles").insert({
+          id: data.user.id,
+          name,
+          contact_number: contactNumber.replace(/\D/g, ""),
+          user_type: userType,
+          location: userType === "worker" ? location || null : null,
+          date_of_birth: userType === "worker" ? dateOfBirth || null : null,
+        });
 
         if (profileError) {
           return { success: false, error: handleSupabaseError(profileError) };
@@ -173,7 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { success: true };
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error("Signup error:", error);
       return { success: false, error: handleSupabaseError(error) };
     }
   };
@@ -182,21 +218,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password
+        password,
       });
 
       if (error) {
-        console.error('Login error:', error);
+        console.error("Login error:", error);
         return false;
       }
 
       if (data.user) {
         return true;
       }
-      
+
       return false;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       return false;
     }
   };
@@ -207,26 +243,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updateProfile = async () => {
       try {
         const updateData: any = {};
-        
+
         if (updates.name !== undefined) updateData.name = updates.name;
-        if (updates.contactNumber !== undefined) updateData.contact_number = updates.contactNumber;
-        if (updates.location !== undefined) updateData.location = updates.location;
+        if (updates.contactNumber !== undefined)
+          updateData.contact_number = updates.contactNumber;
+        if (updates.location !== undefined)
+          updateData.location = updates.location;
         if (updates.weight !== undefined) updateData.weight = updates.weight;
         if (updates.height !== undefined) updateData.height = updates.height;
-        if (updates.profilePicture !== undefined) updateData.profile_picture = updates.profilePicture;
-        if (updates.workingPicture !== undefined) updateData.working_picture = updates.workingPicture;
+        if (updates.profilePicture !== undefined)
+          updateData.profile_picture = updates.profilePicture;
+        if (updates.workingPicture !== undefined)
+          updateData.working_picture = updates.workingPicture;
 
         const { error } = await supabase
-          .from('profiles')
+          .from("profiles")
           .update(updateData)
-          .eq('id', user.id);
+          .eq("id", user.id);
 
         if (error) throw error;
 
         const updatedUser = { ...user, ...updates };
         setUser(updatedUser);
       } catch (error) {
-        console.error('Error updating profile:', error);
+        console.error("Error updating profile:", error);
       }
     };
 
@@ -237,7 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await supabase.auth.signOut();
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     }
     setUser(null);
   };
@@ -245,9 +285,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const getUserProfile = async (userId: string): Promise<User | null> => {
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
         .single();
 
       if (error) throw error;
@@ -256,7 +296,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return {
           id: data.id,
           name: data.name,
-          email: '', // Email not stored in profiles
+          email: "", // Email not stored in profiles
           contactNumber: data.contact_number,
           userType: data.user_type,
           location: data.location || undefined,
@@ -265,17 +305,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           height: data.height || undefined,
           profilePicture: data.profile_picture || undefined,
           workingPicture: data.working_picture || undefined,
-          createdAt: data.created_at
+          createdAt: data.created_at,
         };
       }
     } catch (error) {
-      console.error('Error getting user profile:', error);
+      console.error("Error getting user profile:", error);
     }
     return null;
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, loading, updateUser, getUserProfile }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        signup,
+        logout,
+        loading,
+        updateUser,
+        getUserProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
