@@ -28,33 +28,33 @@ export function MyJobsPage() {
     }
   }, [user]);
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
 
     // Update all job statuses first
-    const updatedJobs = JobStatusManager.updateAllJobStatuses();
+    const updatedJobs = await JobStatusManager.updateAllJobStatuses();
 
     if (user.userType === 'farmer') {
-      setJobs(updatedJobs.filter(job => job.farmerId === user.id));
+      setJobs(updatedJobs.filter((job: Job) => job.farmerId === user.id));
     } else {
-      const allApplications = applicationStorage.getApplications();
-      const userApplications = allApplications.filter(app => app.workerId === user.id);
+      const allApplications = await applicationStorage.getApplications();
+      const userApplications = allApplications.filter((app: Application) => app.workerId === user.id);
       setApplications(userApplications);
 
       // Filter jobs to only include those that still exist AND have user applications
-      const appliedJobs = updatedJobs.filter(job => 
-        userApplications.some(app => app.jobId === job.id)
+      const appliedJobs = updatedJobs.filter((job: Job) => 
+        userApplications.some((app: Application) => app.jobId === job.id)
       );
       setJobs(appliedJobs);
 
       // Clean up applications for deleted jobs
-      const validJobIds = new Set(updatedJobs.map(job => job.id));
-      const validApplications = userApplications.filter(app => validJobIds.has(app.jobId));
+      const validJobIds = new Set(updatedJobs.map((job: Job) => job.id));
+      const validApplications = userApplications.filter((app: Application) => validJobIds.has(app.jobId));
       
       // If some applications were for deleted jobs, update localStorage
       if (validApplications.length !== userApplications.length) {
-        const allApps = applicationStorage.getApplications();
-        const otherUsersApps = allApps.filter(app => app.workerId !== user.id);
+        const allApps = await applicationStorage.getApplications();
+        const otherUsersApps = allApps.filter((app: Application) => app.workerId !== user.id);
         const cleanedApplications = [...otherUsersApps, ...validApplications];
         localStorage.setItem('kheticulture_applications', JSON.stringify(cleanedApplications));
         setApplications(validApplications);
@@ -63,8 +63,7 @@ export function MyJobsPage() {
   };
 
   const getJobApplications = (jobId: string): Application[] => {
-    const allApplications = applicationStorage.getApplications();
-    return allApplications.filter(app => app.jobId === jobId);
+    return applications.filter((app: Application) => app.jobId === jobId);
   };
 
   const hasApplications = (jobId: string): boolean => {
@@ -72,8 +71,7 @@ export function MyJobsPage() {
   };
 
   const getAcceptedApplicationsCount = (jobId: string): number => {
-    const allApplications = applicationStorage.getApplications();
-    return allApplications.filter(app => app.jobId === jobId && app.status === 'accepted').length;
+    return applications.filter((app: Application) => app.jobId === jobId && app.status === 'accepted').length;
   };
 
   const getFarmerProfile = (farmerId: string): User | null => {
@@ -157,16 +155,16 @@ export function MyJobsPage() {
     setShowDeleteConfirm(jobId);
   };
 
-  const confirmDeleteJob = () => {
+  const confirmDeleteJob = async () => {
     if (!showDeleteConfirm) return;
 
     // Get all jobs and filter out the one to delete
-    const allJobs = jobStorage.getJobs();
+    const allJobs = await jobStorage.getJobs();
     const updatedJobs = allJobs.filter(job => job.id !== showDeleteConfirm);
     localStorage.setItem('kheticulture_jobs', JSON.stringify(updatedJobs));
 
     // Also delete all applications for this job
-    const allApplications = applicationStorage.getApplications();
+    const allApplications = await applicationStorage.getApplications();
     const updatedApplications = allApplications.filter(app => app.jobId !== showDeleteConfirm);
     localStorage.setItem('kheticulture_applications', JSON.stringify(updatedApplications));
 
@@ -295,7 +293,6 @@ export function MyJobsPage() {
 
   const DeleteConfirmModal = () => {
     if (!showDeleteConfirm) return null;
-
     const job = jobs.find(j => j.id === showDeleteConfirm);
     const jobApplications = getJobApplications(showDeleteConfirm);
 
@@ -340,6 +337,8 @@ export function MyJobsPage() {
 
   const FarmerProfileModal = () => {
     if (!selectedFarmer || !showFarmerModal) return null;
+    const farmerJobs = jobs.filter((job: Job) => job.farmerId === selectedFarmer.id);
+    const workersHired = farmerJobs.reduce((total: number, job: Job) => total + (job.acceptedWorkerIds?.length || 0), 0);
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -433,15 +432,13 @@ export function MyJobsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">
                   <div className="text-lg font-bold text-green-600">
-                    {jobStorage.getJobs().filter(job => job.farmerId === selectedFarmer.id).length}
+                    {farmerJobs.length}
                   </div>
                   <div className="text-xs text-gray-600">Jobs Posted</div>
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-bold text-green-600">
-                    {jobStorage.getJobs()
-                      .filter(job => job.farmerId === selectedFarmer.id)
-                      .reduce((total, job) => total + (job.acceptedWorkerIds?.length || 0), 0)}
+                    {workersHired}
                   </div>
                   <div className="text-xs text-gray-600">Workers Hired</div>
                 </div>
@@ -495,32 +492,32 @@ export function MyJobsPage() {
             <div className="grid grid-cols-4 gap-3 mb-6">
               <div className="bg-green-50 rounded-lg p-3 text-center">
                 <div className="text-lg font-bold text-green-600">
-                  {jobs.filter(job => job.status === 'open').length}
+                  {jobs.filter((job: Job) => job.status === 'open').length}
                 </div>
                 <div className="text-xs text-green-700">Open</div>
               </div>
               <div className="bg-blue-50 rounded-lg p-3 text-center">
                 <div className="text-lg font-bold text-blue-600">
-                  {jobs.filter(job => job.status === 'filled').length}
+                  {jobs.filter((job: Job) => job.status === 'filled').length}
                 </div>
                 <div className="text-xs text-blue-700">Filled</div>
               </div>
               <div className="bg-yellow-50 rounded-lg p-3 text-center">
                 <div className="text-lg font-bold text-yellow-600">
-                  {jobs.filter(job => job.status === 'in-progress').length}
+                  {jobs.filter((job: Job) => job.status === 'in-progress').length}
                 </div>
                 <div className="text-xs text-yellow-700">In Progress</div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3 text-center">
                 <div className="text-lg font-bold text-gray-600">
-                  {jobs.filter(job => job.status === 'completed').length}
+                  {jobs.filter((job: Job) => job.status === 'completed').length}
                 </div>
                 <div className="text-xs text-gray-700">Completed</div>
               </div>
             </div>
           )}
 
-          {jobs.map(job => (
+          {jobs.map((job: Job) => (
             <div key={job.id}>
               {user.userType === 'worker' && (
                 <div className="mb-3">

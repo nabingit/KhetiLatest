@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Type as UserType, LogOut, Edit2, Save, X, MapPin, Calendar, Weight, Ruler, Camera, Upload, Phone } from 'lucide-react';
 import { jobStorage, applicationStorage } from '../utils/storage';
+import { Job, Application } from '../types';
 
 export function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
@@ -24,53 +25,38 @@ export function ProfilePage() {
     workingPicture: user?.workingPicture || ''
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
 
   useEffect(() => {
     if (user) {
-      calculateActivityStats();
+      async function fetchData() {
+        const jobsData = await jobStorage.getJobs();
+        setJobs(jobsData);
+        const applicationsData = await applicationStorage.getApplications();
+        setApplications(applicationsData);
+        calculateActivityStats(jobsData, applicationsData);
+      }
+      fetchData();
     }
   }, [user]);
 
-  const calculateActivityStats = () => {
+  const calculateActivityStats = (allJobs: Job[], allApplications: Application[]) => {
     if (!user) return;
-
-    const allJobs = jobStorage.getJobs();
-    const allApplications = applicationStorage.getApplications();
-
     if (user.userType === 'farmer') {
-      // For farmers: count jobs posted and total hires
-      const userJobs = allJobs.filter(job => job.farmerId === user.id);
+      const userJobs = allJobs.filter((job: Job) => job.farmerId === user.id);
       const jobsPosted = userJobs.length;
-      
-      // Count total accepted workers across all jobs
-      const totalHires = userJobs.reduce((total, job) => {
-        return total + (job.acceptedWorkerIds?.length || 0);
-      }, 0);
-
-      setActivityStats({
-        jobsPosted,
-        totalHires,
-        applications: 0,
-        jobsCompleted: 0
-      });
+      const totalHires = userJobs.reduce((total: number, job: Job) => total + (job.acceptedWorkerIds?.length || 0), 0);
+      setActivityStats({ jobsPosted, totalHires, applications: 0, jobsCompleted: 0 });
     } else {
-      // For workers: count applications and completed jobs
-      const userApplications = allApplications.filter(app => app.workerId === user.id);
-      const applications = userApplications.length;
-      
-      // Count jobs where the worker was accepted and the job is completed
-      const acceptedApplications = userApplications.filter(app => app.status === 'accepted');
-      const jobsCompleted = acceptedApplications.filter(app => {
-        const job = allJobs.find(j => j.id === app.jobId);
+      const userApplications = allApplications.filter((app: Application) => app.workerId === user.id);
+      const applicationsCount = userApplications.length;
+      const acceptedApplications = userApplications.filter((app: Application) => app.status === 'accepted');
+      const jobsCompleted = acceptedApplications.filter((app: Application) => {
+        const job = jobs.find((j: Job) => j.id === app.jobId);
         return job && job.status === 'completed';
       }).length;
-
-      setActivityStats({
-        jobsPosted: 0,
-        totalHires: 0,
-        applications,
-        jobsCompleted
-      });
+      setActivityStats({ jobsPosted: 0, totalHires: 0, applications: applicationsCount, jobsCompleted });
     }
   };
 
@@ -205,7 +191,7 @@ export function ProfilePage() {
     setIsEditing(false);
     setErrors({});
     // Recalculate stats after update
-    calculateActivityStats();
+    calculateActivityStats(jobs, applications);
   };
 
   const handleCancel = () => {
