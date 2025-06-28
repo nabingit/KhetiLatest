@@ -49,10 +49,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
-        // Handle case where profile doesn't exist yet (common during signup)
+        // Handle case where profile doesn't exist
         if (error.code === 'PGRST116') {
-          console.warn('Profile not found, this may be normal during signup process');
-          setUser(null);
+          console.error('Profile not found for user:', userId);
+          // Don't set user to null here, let the login function handle this
+          setLoading(false);
           return;
         }
         throw error;
@@ -84,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
+      // Don't set user to null on error, let the login function handle this
     } finally {
       setLoading(false);
     }
@@ -178,8 +180,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const testConnection = async () => {
     try {
+      console.log('Testing Supabase connection...');
+      const { data, error } = await supabase.from('profiles').select('count').limit(1);
+      if (error) {
+        console.error('Connection test failed:', error);
+        return false;
+      }
+      console.log('Connection test successful');
+      return true;
+    } catch (error) {
+      console.error('Connection test error:', error);
+      return false;
+    }
+  };
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string; profileExists?: boolean }> => {
+    try {
+      console.log('Attempting login for email:', email);
+      
+      // Test connection first
+      const connectionOk = await testConnection();
+      if (!connectionOk) {
+        return { success: false, error: 'Unable to connect to the server. Please check your internet connection.' };
+      }
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -187,17 +213,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('Login error:', error);
-        return false;
+        return { success: false, error: handleSupabaseError(error) };
       }
 
       if (data.user) {
-        return true;
+        console.log('Auth successful, checking profile for user:', data.user.id);
+        // Check if profile exists
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError && profileError.code === 'PGRST116') {
+          // Profile doesn't exist
+          console.error('Profile not found for user:', data.user.id);
+          return { success: false, error: 'Profile not found. Please contact support.', profileExists: false };
+        }
+
+        if (profileError) {
+          console.error('Profile check error:', profileError);
+          return { success: false, error: 'Error checking profile. Please try again.' };
+        }
+
+        console.log('Profile found, login successful');
+        return { success: true, profileExists: true };
       }
       
-      return false;
+      console.log('No user data returned from auth');
+      return { success: false, error: 'Login failed. Please try again.' };
     } catch (error) {
       console.error('Login error:', error);
-      return false;
+      return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
   };
 
@@ -275,7 +322,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, loading, updateUser, getUserProfile }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, loading, updateUser, getUserProfile, testConnection }}>
       {children}
     </AuthContext.Provider>
   );

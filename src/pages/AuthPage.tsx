@@ -7,8 +7,8 @@ export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
-    password: '',
+    email: 'avisheksubedi0@gmail.com',
+    password: 'Hello@123',
     contactNumber: '',
     userType: 'worker' as 'farmer' | 'worker',
     location: '',
@@ -18,7 +18,7 @@ export function AuthPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login, signup } = useAuth();
+  const { login, signup, testConnection } = useAuth();
   const navigate = useNavigate();
 
   const calculateAge = (dateOfBirth: string): number => {
@@ -70,9 +70,13 @@ export function AuthPage() {
       let success = false;
       
       if (isLogin) {
-        success = await login(formData.email, formData.password);
-        if (!success) {
-          setError('Invalid email or password');
+        console.log('Attempting login...');
+        const result = await login(formData.email, formData.password);
+        console.log('Login result:', result);
+        if (!result.success) {
+          setError(result.error || 'Invalid email or password');
+        } else {
+          success = true;
         }
       } else {
         if (!formData.name.trim()) {
@@ -122,7 +126,7 @@ export function AuthPage() {
       }
 
       if (success) {
-        navigate('/');
+        navigate('/profile');
       }
     } catch (err) {
       setError('Something went wrong. Please try again.');
@@ -140,6 +144,17 @@ export function AuthPage() {
       dateOfBirth: newUserType === 'farmer' ? '' : formData.dateOfBirth
     });
     setError(''); // Clear any existing errors
+  };
+
+  const handleDebugConnection = async () => {
+    console.log('Testing connection...');
+    const result = await testConnection();
+    console.log('Connection test result:', result);
+    if (result) {
+      setError('Connection test successful! Check console for details.');
+    } else {
+      setError('Connection test failed! Check console for details.');
+    }
   };
 
   return (
@@ -345,6 +360,15 @@ export function AuthPage() {
               className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Please wait...' : isLogin ? 'Login' : 'Create Account'}
+            </button>
+
+            {/* Debug button - remove in production */}
+            <button
+              type="button"
+              onClick={handleDebugConnection}
+              className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors text-sm"
+            >
+              Debug Connection
             </button>
           </form>
         </div>

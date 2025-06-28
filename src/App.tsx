@@ -38,7 +38,7 @@ function AppRoutes() {
       <Routes>
         <Route 
           path="/auth" 
-          element={user ? <Navigate to="/" replace /> : <AuthPage />} 
+          element={user ? <Navigate to="/profile" replace /> : <AuthPage />} 
         />
         <Route 
           path="/" 

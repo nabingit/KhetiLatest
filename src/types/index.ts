@@ -48,10 +48,11 @@ export interface Application {
 
 export interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; profileExists?: boolean }>;
   signup: (name: string, email: string, password: string, contactNumber: string, userType: 'farmer' | 'worker', location?: string, dateOfBirth?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   loading: boolean;
   updateUser: (updates: Partial<User>) => void;
   getUserProfile: (userId: string) => Promise<User | null>;
+  testConnection: () => Promise<boolean>;
 }
